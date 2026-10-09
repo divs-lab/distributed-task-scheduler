@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>Taskboard · Distributed Scheduler</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172238;
+      --muted: #758198;
+      --line: #e7ebf2;
+      --panel: #fff;
+      --canvas: #f5f7fb;
+      --blue: #4568e8;
+      --blue-dark: #3152ce;
+      --blue-wash: #edf1ff;
+      --green: #17976b;
+      --green-wash: #e8f7f0;
+      --amber: #ba7814;
+      --amber-wash: #fff5df;
+      --red: #d24f59;
+      --red-wash: #fff0f0;
+      --shadow: 0 14px 42px rgba(29, 46, 84, .07);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { max-width: 1440px; margin: 0 auto; padding: 34px 42px 48px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap: 24px; margin-bottom: 30px; }
+    .brand { display:flex; align-items:center; gap:13px; min-width:0; }
+    .brand-mark { display:grid; place-items:center; width:43px; height:43px; flex:0 0 43px; border-radius:14px; color:#fff; background:linear-gradient(145deg,#607df4,#3958d7); box-shadow:0 7px 18px #4568e849; }
+    .brand-mark svg { width:23px; height:23px; }
+    .brand-name { font-size:15px; font-weight:750; letter-spacing:-.02em; }
+    .brand-caption { margin-top:2px; color:var(--muted); font-size:12px; }
+    .top-actions { display:flex; align-items:center; gap:13px; }
+    .connection { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .pulse { width:8px; height:8px; border-radius:50%; background:#18a976; box-shadow:0 0 0 4px #18a9761c; }
+    .pulse.offline { background:#d24f59; box-shadow:0 0 0 4px #d24f591c; }
+    .icon-button { display:grid; place-items:center; width:38px; height:38px; border:1px solid var(--line); border-radius:11px; background:#fff; color:#68758b; transition:.18s ease; }
+    .icon-button:hover { color:var(--blue); border-color:#cbd5ff; background:#fafbff; }
+    .icon-button svg { width:17px; height:17px; }
+    .page-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:20px; margin-bottom:25px; }
+    .eyebrow { color:var(--blue); text-transform:uppercase; font-size:10px; letter-spacing:.15em; font-weight:800; }
+    h1 { margin:6px 0 0; font-size:29px; line-height:1.18; letter-spacing:-.045em; font-weight:760; }
+    .intro { margin:8px 0 0; color:var(--muted); font-size:13px; }
+    .now { color:var(--muted); font-size:12px; white-space:nowrap; }
+    .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:15px; margin-bottom:20px; }
+    .metric { position:relative; min-height:114px; padding:19px 20px; border:1px solid var(--line); border-radius:15px; background:var(--panel); box-shadow:0 2px 8px #23335805; overflow:hidden; }
+    .metric-top { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; font-weight:600; }
+    .metric-icon { display:grid; place-items:center; width:31px; height:31px; border-radius:10px; background:var(--blue-wash); color:var(--blue); }
+    .metric-icon svg { width:16px; height:16px; }
+    .metric:nth-child(2) .metric-icon { color:var(--amber); background:var(--amber-wash); }
+    .metric:nth-child(3) .metric-icon { color:var(--green); background:var(--green-wash); }
+    .metric:nth-child(4) .metric-icon { color:var(--red); background:var(--red-wash); }
+    .metric-value { margin-top:10px; font-size:27px; line-height:1; font-weight:760; letter-spacing:-.04em; }
+    .metric-note { margin-top:5px; color:#9aa4b5; font-size:11px; }
+    .workspace { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:18px; align-items:start; }
+    .main-column { min-width:0; display:grid; gap:18px; }
+    .card { border:1px solid var(--line); border-radius:16px; background:var(--panel); box-shadow:0 2px 8px #23335805; }
+    .card-head { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:17px 20px; border-bottom:1px solid var(--line); }
+    .card-title { margin:0; font-size:14px; font-weight:720; letter-spacing:-.015em; }
+    .card-subtitle { margin-top:3px; color:var(--muted); font-size:11px; }
+    .section-label { display:flex; align-items:center; gap:10px; }
+    .section-icon { display:grid; place-items:center; width:32px; height:32px; border-radius:10px; background:var(--blue-wash); color:var(--blue); }
+    .section-icon svg { width:16px; height:16px; }
+    .form-content { padding:18px 20px 20px; }
+    .form-grid { display:grid; grid-template-columns:1fr 1.4fr .7fr auto; align-items:end; gap:13px; }
+    .field label { display:block; margin:0 0 7px; color:#536078; font-size:11px; font-weight:650; }
+    .field input, .field select, .filter-select { width:100%; height:39px; padding:0 11px; border:1px solid #dfe4ed; border-radius:9px; outline:none; background:#fff; color:var(--ink); font-size:12px; transition:border-color .15s, box-shadow .15s; }
+    .field input:focus, .field select:focus, .filter-select:focus { border-color:#8ea2ff; box-shadow:0 0 0 3px #4568e817; }
+    .field input::placeholder { color:#a1aabb; }
+    .primary-button { display:inline-flex; justify-content:center; align-items:center; gap:8px; height:39px; padding:0 16px; border:0; border-radius:9px; color:#fff; background:var(--blue); font-size:12px; font-weight:680; box-shadow:0 5px 12px #4568e82c; transition:.17s ease; white-space:nowrap; }
+    .primary-button:hover { background:var(--blue-dark); transform:translateY(-1px); }
+    .primary-button:disabled { cursor:wait; opacity:.6; transform:none; }
+    .primary-button svg { width:15px; height:15px; }
+    .form-message { min-height:17px; margin-top:9px; color:var(--muted); font-size:11px; }
+    .form-message.error { color:var(--red); }
+    .form-message.success { color:var(--green); }
+    .list-head { align-items:flex-end; }
+    .list-tools { display:flex; align-items:center; gap:9px; }
+    .filter-select { width:145px; height:34px; font-size:11px; }
+    .refresh-label { color:var(--muted); font-size:10px; white-space:nowrap; }
+    .table-wrap { width:100%; overflow-x:auto; }
+    table { width:100%; min-width:690px; border-collapse:collapse; text-align:left; }
+    th { height:38px; padding:0 17px; color:#929daf; background:#fbfcfe; border-bottom:1px solid var(--line); font-size:9px; letter-spacing:.08em; font-weight:750; text-transform:uppercase; white-space:nowrap; }
+    td { height:58px; padding:8px 17px; border-bottom:1px solid #eff1f6; color:#40506a; font-size:11px; white-space:nowrap; }
+    tbody tr { transition:background .12s; cursor:pointer; }
+    tbody tr:hover { background:#fafbff; }
+    tbody tr:last-child td { border-bottom:0; }
+    .task-id { color:var(--blue); font-size:11px; font-weight:730; }
+    .task-type { display:flex; align-items:center; gap:9px; font-weight:650; color:#2d3b53; }
+    .type-icon { display:grid; place-items:center; width:28px; height:28px; border-radius:9px; background:#f0f3f9; color:#6b7790; }
+    .type-icon svg { width:14px; height:14px; }
+    .status { display:inline-flex; align-items:center; gap:6px; padding:5px 8px; border-radius:999px; background:#f2f4f7; color:#737f91; font-size:10px; font-weight:700; }
+    .status::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .status.pending { color:var(--amber); background:var(--amber-wash); }
+    .status.running { color:var(--blue); background:var(--blue-wash); }
+    .status.success { color:var(--green); background:var(--green-wash); }
+    .status.failed { color:var(--red); background:var(--red-wash); }
+    .status.cancelled { color:#737f91; background:#f0f2f5; }
+    .row-action { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border:1px solid transparent; border-radius:8px; color:#8591a4; background:transparent; }
+    .row-action:hover { color:var(--blue); border-color:var(--line); background:#fff; }
+    .row-action svg { width:15px; height:15px; }
+    .table-empty { padding:38px 15px; text-align:center; color:#8b97a9; }
+    .table-empty strong { display:block; margin-bottom:4px; color:#46536a; font-size:12px; }
+    .table-foot { display:flex; justify-content:space-between; align-items:center; min-height:43px; padding:0 18px; border-top:1px solid var(--line); color:#8d98aa; font-size:10px; }
+    .detail-card { position:sticky; top:18px; min-height:280px; overflow:hidden; }
+    .detail-empty { display:grid; place-items:center; min-height:260px; padding:25px; text-align:center; color:#8b97a9; }
+    .empty-art { display:grid; place-items:center; width:52px; height:52px; margin:0 auto 13px; border-radius:16px; background:#f1f4fa; color:#8b98af; }
+    .empty-art svg { width:23px; height:23px; }
+    .detail-empty strong { display:block; color:#45536b; font-size:12px; }
+    .detail-empty p { max-width:210px; margin:5px auto 0; font-size:11px; }
+    .detail-content { display:none; }
+    .detail-content.visible { display:block; }
+    .detail-top { padding:19px 19px 16px; border-bottom:1px solid var(--line); }
+    .detail-top-line { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .detail-id { color:var(--muted); font-size:10px; font-weight:650; }
+    .detail-type { display:flex; align-items:center; gap:10px; margin-top:14px; font-size:18px; font-weight:750; letter-spacing:-.03em; }
+    .detail-type .type-icon { width:34px; height:34px; }
+    .detail-type .type-icon svg { width:17px; height:17px; }
+    .detail-meta { display:grid; grid-template-columns:1fr 1fr; gap:14px 10px; padding:17px 19px; }
+    .meta-label { margin-bottom:4px; color:#909bad; font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+    .meta-value { color:#3a4961; font-size:11px; font-weight:620; overflow-wrap:anywhere; }
+    .error-box { margin:0 19px 15px; padding:11px 12px; border:1px solid #ffe0e0; border-radius:9px; background:#fff8f8; color:#a44149; font-size:10px; line-height:1.5; }
+    .detail-actions { display:flex; gap:8px; padding:0 19px 17px; }
+    .secondary-button, .danger-button { display:inline-flex; justify-content:center; align-items:center; gap:7px; min-height:33px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:#fff; color:#5f6d82; font-size:10px; font-weight:650; }
+    .secondary-button:hover { color:var(--blue); border-color:#cbd5ff; }
+    .danger-button:hover { color:var(--red); border-color:#ffd2d2; background:#fffafa; }
+    .secondary-button svg, .danger-button svg { width:13px; height:13px; }
+    .history { padding:0 19px 19px; }
+    .history-head { display:flex; align-items:center; justify-content:space-between; margin:0 0 11px; padding-top:15px; border-top:1px solid var(--line); }
+    .history-title { font-size:11px; font-weight:720; }
+    .history-count { color:#929daf; font-size:10px; }
+    .attempt { position:relative; display:grid; grid-template-columns:22px 1fr; gap:9px; padding-bottom:13px; }
+    .attempt:last-child { padding-bottom:0; }
+    .attempt-icon { display:grid; place-items:center; width:20px; height:20px; border-radius:7px; background:#eef1f6; color:#8590a2; }
+    .attempt-icon.success { background:var(--green-wash); color:var(--green); }
+    .attempt-icon.failed { background:var(--red-wash); color:var(--red); }
+    .attempt-icon svg { width:12px; height:12px; }
+    .attempt::before { content:""; position:absolute; top:20px; bottom:0; left:9px; width:1px; background:#e9edf3; }
+    .attempt:last-child::before { display:none; }
+    .attempt-title { color:#43516a; font-size:10px; font-weight:700; }
+    .attempt-time { margin-top:2px; color:#95a0b0; font-size:9px; }
+    .attempt-error { margin-top:5px; color:#b0474f; font-size:9px; white-space:normal; }
+    .history-empty { color:#929daf; font-size:10px; }
+    .toast { position:fixed; z-index:5; right:26px; bottom:24px; display:flex; align-items:center; gap:10px; max-width:min(420px,calc(100vw - 32px)); padding:12px 16px; border:1px solid #dce5e3; border-radius:12px; background:#fff; box-shadow:var(--shadow); color:#34445b; font-size:12px; opacity:0; transform:translateY(10px); pointer-events:none; transition:.2s ease; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast.error { border-color:#ffdcdc; color:#aa424b; }
+    .toast-dot { width:7px; height:7px; flex:0 0 7px; border-radius:50%; background:var(--green); }
+    .toast.error .toast-dot { background:var(--red); }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    @media (max-width: 1060px) { .shell { padding:28px 24px 40px; } .workspace { grid-template-columns:minmax(0,1fr) 300px; gap:14px; } .form-grid { grid-template-columns:1fr 1.3fr .7fr; } .form-grid .primary-button { grid-column:3; } }
+    @media (max-width: 800px) { .workspace { grid-template-columns:1fr; } .detail-card { position:static; } .metrics { gap:10px; } .metric { padding:15px; } .metric-value { font-size:24px; } }
+    @media (max-width: 560px) { .shell { padding:20px 14px 32px; } .topbar { margin-bottom:23px; } .brand-caption { display:none; } .connection span:last-child { display:none; } .page-heading { display:block; } h1 { font-size:25px; } .now { margin-top:10px; } .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .metric { min-height:100px; } .card-head { padding:14px; } .form-content { padding:15px 14px 16px; } .form-grid { grid-template-columns:1fr 1fr; gap:12px; } .form-grid .primary-button { grid-column:1 / -1; } .list-head { align-items:flex-start; flex-direction:column; } .list-tools { width:100%; justify-content:space-between; } .filter-select { flex:1; } th, td { padding-left:12px; padding-right:12px; } .detail-top, .detail-meta { padding-left:15px; padding-right:15px; } .detail-actions, .history { padding-left:15px; padding-right:15px; } .error-box { margin-left:15px; margin-right:15px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 12h6m-6 5h8"/><circle cx="17" cy="15" r="4"/><path d="M17 13v2l1.4 1"/><path d="m15 4 2 2 4-4"/></svg></div>
+        <div><div class="brand-name">Taskboard</div><div class="brand-caption">Distributed Task Scheduler</div></div>
+      </div>
+      <div class="top-actions">
+        <div class="connection" aria-live="polite"><span id="connectionDot" class="pulse"></span><span id="connectionText">Checking API</span></div>
+        <button class="icon-button" id="refreshButton" type="button" aria-label="Refresh tasks" title="Refresh tasks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2"/></svg></button>
+      </div>
+    </header>
+
+    <section class="page-heading">
+      <div><div class="eyebrow">Operations overview</div><h1>Task scheduler</h1><p class="intro">Schedule background work and follow every execution from one place.</p></div>
+      <div class="now" id="currentTime"></div>
+    </section>
+
+    <section class="metrics" aria-label="Task summary">
+      <article class="metric"><div class="metric-top"><span>Total tasks</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h4"/></svg></span></div><div class="metric-value" id="totalCount">—</div><div class="metric-note">All scheduled work</div></article>
+      <article class="metric"><div class="metric-top"><span>In progress</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span></div><div class="metric-value" id="runningCount">—</div><div class="metric-note">Pending or running</div></article>
+      <article class="metric"><div class="metric-top"><span>Successful</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></span></div><div class="metric-value" id="successCount">—</div><div class="metric-note">Completed successfully</div></article>
+      <article class="metric"><div class="metric-top"><span>Failed</span><span class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="m9 9 6 6m0-6-6 6"/></svg></span></div><div class="metric-value" id="failedCount">—</div><div class="metric-note">Need attention</div></article>
+    </section>
+
+    <section class="workspace">
+      <div class="main-column">
+        <section class="card" aria-labelledby="scheduleTitle">
+          <div class="card-head"><div class="section-label"><span class="section-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v12m-6-6h12"/><circle cx="12" cy="12" r="9"/></svg></span><div><h2 class="card-title" id="scheduleTitle">Schedule a task</h2><div class="card-subtitle">Add work to the execution queue</div></div></div></div>
+          <form class="form-content" id="scheduleForm">
+            <div class="form-grid">
+              <div class="field"><label for="taskType">Task type</label><select id="taskType" name="taskType" required><option value="EMAIL">Email</option><option value="CLEANUP">Cleanup</option><option value="ALERT">Alert</option></select></div>
+              <div class="field"><label for="executionTime">Run at <span style="font-weight:450;color:#8a95a6">(your local time)</span></label><input id="executionTime" name="executionTime" type="datetime-local" required></div>
+              <div class="field"><label for="maxRetries">Max retries</label><input id="maxRetries" name="maxRetries" type="number" min="0" max="20" value="3" required></div>
+              <button class="primary-button" id="scheduleButton" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14m-7-7h14"/></svg>Schedule task</button>
+            </div>
+            <div class="form-message" id="formMessage" aria-live="polite">Times are sent to the API as UTC.</div>
+          </form>
+        </section>
+
+        <section class="card" aria-labelledby="taskListTitle">
+          <div class="card-head list-head"><div><h2 class="card-title" id="taskListTitle">Recent tasks</h2><div class="card-subtitle">Select a task to inspect its execution details</div></div><div class="list-tools"><select class="filter-select" id="statusFilter" aria-label="Filter tasks by status"><option value="">All statuses</option><option value="PENDING">Pending</option><option value="RUNNING">Running</option><option value="SUCCESS">Success</option><option value="FAILED">Failed</option><option value="CANCELLED">Cancelled</option></select><span class="refresh-label" id="lastUpdated">Updating…</span></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Task</th><th>Type</th><th>Status</th><th>Scheduled</th><th>Retries</th><th aria-label="Actions"></th></tr></thead><tbody id="taskRows"><tr><td colspan="6" class="table-empty">Loading tasks…</td></tr></tbody></table></div>
+          <div class="table-foot"><span id="resultCount">Loading</span><span>Auto refresh · 5 sec</span></div>
+        </section>
+      </div>
+
+      <aside class="card detail-card" aria-label="Selected task details">
+        <div class="detail-empty" id="detailEmpty"><div><div class="empty-art"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10a2 2 0 0 1 2 2v14l-7-4-7 4V6a2 2 0 0 1 2-2Z"/><path d="M9 8h6m-6 4h6"/></svg></div><strong>Task details</strong><p>Choose a task from the list to see its status, retry controls, and execution history.</p></div></div>
+        <div class="detail-content" id="detailContent"></div>
+      </aside>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"><span class="toast-dot"></span><span id="toastText"></span></div>
+
+  <script>
+    const API = "/api/v1/tasks";
+    const state = { tasks: [], selectedId: null, busy: false };
+    const $ = (selector) => document.querySelector(selector);
+    const svg = {
+      email: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
+      cleanup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+      alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12h4"/></svg>',
+      check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>',
+      close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>',
+      retry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2"/></svg>'
+    };
+    let toastTimer;
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+    }
+    function formatDate(value, includeSeconds = false) {
+      if (!value) return "—";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "—";
+      return new Intl.DateTimeFormat(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit", ...(includeSeconds ? {second:"2-digit"} : {}) }).format(date);
+    }
+    function formatLongDate(value) {
+      if (!value) return "—";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, { year:"numeric", month:"short", day:"numeric", hour:"numeric", minute:"2-digit", second:"2-digit" }).format(date);
+    }
+    function typeIcon(type) {
+      const key = String(type || "").toLowerCase();
+      return `<span class="type-icon" aria-hidden="true">${svg[key] || svg.alert}</span>`;
+    }
+    function statusBadge(status) {
+      const value = String(status || "UNKNOWN").toLowerCase();
+      return `<span class="status ${escapeHtml(value)}">${escapeHtml(status || "UNKNOWN")}</span>`;
+    }
+    function showToast(message, isError = false) {
+      const toast = $("#toast");
+      $("#toastText").textContent = message;
+      toast.classList.toggle("error", isError);
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 3400);
+    }
+    function formMessage(message, kind = "") {
+      const element = $("#formMessage");
+      element.textContent = message;
+      element.className = `form-message ${kind}`;
+    }
+    async function api(path, options = {}) {
+      const response = await fetch(path, { ...options, headers: { ...(options.body ? {"Content-Type":"application/json"} : {}), ...(options.headers || {}) } });
+      if (response.status === 204) return null;
+      const text = await response.text();
+      let body = null;
+      if (text) { try { body = JSON.parse(text); } catch { body = { message:text }; } }
+      if (!response.ok) throw new Error(body?.message || `Request failed (${response.status})`);
+      return body;
+    }
+    async function checkHealth() {
+      const dot = $("#connectionDot");
+      try {
+        const health = await api("/actuator/health");
+        const up = health?.status === "UP";
+        dot.classList.toggle("offline", !up);
+        $("#connectionText").textContent = up ? "API connected" : "API attention needed";
+      } catch {
+        dot.classList.add("offline");
+        $("#connectionText").textContent = "API unavailable";
+      }
+    }
+    async function loadTasks(keepSelection = true) {
+      if (state.busy) return;
+      const filter = $("#statusFilter").value;
+      const query = new URLSearchParams({ page:"0", size:"100" });
+      if (filter) query.set("status", filter);
+      try {
+        const page = await api(`${API}?${query}`);
+        state.tasks = page?.content || [];
+        renderTasks(page?.totalElements ?? state.tasks.length);
+        renderMetrics();
+        $("#lastUpdated").textContent = `Updated ${new Intl.DateTimeFormat(undefined,{hour:"numeric",minute:"2-digit",second:"2-digit"}).format(new Date())}`;
+        if (keepSelection && state.selectedId) {
+          const selected = state.tasks.find((task) => task.id === state.selectedId);
+          if (selected) await selectTask(selected.id, false);
+          else clearDetails();
+        }
+      } catch (error) {
+        $("#taskRows").innerHTML = `<tr><td colspan="6" class="table-empty"><strong>Could not load tasks</strong>${escapeHtml(error.message)}</td></tr>`;
+        $("#resultCount").textContent = "Connection problem";
+        showToast(error.message, true);
+        checkHealth();
+      }
+    }
+    function renderMetrics() {
+      const tasks = state.tasks;
+      $("#totalCount").textContent = tasks.length;
+      $("#runningCount").textContent = tasks.filter((task) => ["PENDING","RUNNING"].includes(task.status)).length;
+      $("#successCount").textContent = tasks.filter((task) => task.status === "SUCCESS").length;
+      $("#failedCount").textContent = tasks.filter((task) => task.status === "FAILED").length;
+    }
+    function renderTasks(total) {
+      const rows = $("#taskRows");
+      if (!state.tasks.length) {
+        rows.innerHTML = `<tr><td colspan="6" class="table-empty"><strong>No tasks found</strong>Schedule a task above and it will appear here.</td></tr>`;
+      } else {
+        rows.innerHTML = state.tasks.map((task) => `<tr data-task-id="${task.id}" aria-selected="${task.id === state.selectedId}">
+          <td><span class="task-id">#${task.id}</span></td>
+          <td><span class="task-type">${typeIcon(task.taskType)}${escapeHtml(task.taskType)}</span></td>
+          <td>${statusBadge(task.status)}</td>
+          <td>${escapeHtml(formatDate(task.executionTime))}</td>
+          <td>${task.retryCount} / ${task.maxRetries}</td>
+          <td><button class="row-action" type="button" data-open-id="${task.id}" aria-label="View task ${task.id}" title="View details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button></td>
+        </tr>`).join("");
+      }
+      const shown = state.tasks.length;
+      $("#resultCount").textContent = `Showing ${shown} ${shown === 1 ? "task" : "tasks"}${total > shown ? ` of ${total}` : ""}`;
+    }
+    function clearDetails() {
+      state.selectedId = null;
+      $("#detailEmpty").style.display = "grid";
+      $("#detailContent").classList.remove("visible");
+      $("#detailContent").innerHTML = "";
+      document.querySelectorAll("#taskRows tr").forEach((row) => row.setAttribute("aria-selected", "false"));
+    }
+    async function selectTask(id, showErrors = true) {
+      state.selectedId = Number(id);
+      document.querySelectorAll("#taskRows tr").forEach((row) => row.setAttribute("aria-selected", String(Number(row.dataset.taskId) === state.selectedId)));
+      try {
+        const [task, history] = await Promise.all([api(`${API}/${id}`), api(`${API}/${id}/history`)]);
+        renderDetails(task, history || []);
+      } catch (error) {
+        if (showErrors) showToast(error.message, true);
+      }
+    }
+    function renderDetails(task, history) {
+      $("#detailEmpty").style.display = "none";
+      const panel = $("#detailContent");
+      panel.classList.add("visible");
+      const actions = [];
+      if (task.status === "PENDING") actions.push(`<button class="danger-button" data-action="cancel" data-id="${task.id}" type="button">${svg.close}Cancel task</button>`);
+      if (task.status === "FAILED") actions.push(`<button class="secondary-button" data-action="retry" data-id="${task.id}" type="button">${svg.retry}Retry task</button>`);
+      const error = task.lastError ? `<div class="error-box"><strong>Latest error</strong><br>${escapeHtml(task.lastError)}</div>` : "";
+      const attempts = history.length ? history.map((attempt) => `<div class="attempt"><span class="attempt-icon ${String(attempt.outcome).toLowerCase()}">${attempt.outcome === "SUCCESS" ? svg.check : attempt.outcome === "FAILED" ? svg.close : "<span style='font-size:9px'>···</span>"}</span><div><div class="attempt-title">Attempt ${attempt.attemptNumber} · ${escapeHtml(attempt.outcome)}</div><div class="attempt-time">Started ${escapeHtml(formatLongDate(attempt.startTime))}${attempt.endTime ? ` · Finished ${escapeHtml(formatLongDate(attempt.endTime))}` : ""}</div>${attempt.errorMessage ? `<div class="attempt-error">${escapeHtml(attempt.errorMessage)}</div>` : ""}</div></div>`).join("") : `<div class="history-empty">No executions yet. The scheduler will pick this task up when it is due.</div>`;
+      panel.innerHTML = `<div class="detail-top"><div class="detail-top-line"><span class="detail-id">TASK #${task.id}</span>${statusBadge(task.status)}</div><div class="detail-type">${typeIcon(task.taskType)}${escapeHtml(task.taskType)}</div></div>
+        <div class="detail-meta"><div><div class="meta-label">Scheduled for</div><div class="meta-value">${escapeHtml(formatLongDate(task.executionTime))}</div></div><div><div class="meta-label">Retry count</div><div class="meta-value">${task.retryCount} / ${task.maxRetries}</div></div><div><div class="meta-label">Created</div><div class="meta-value">${escapeHtml(formatLongDate(task.createdAt))}</div></div><div><div class="meta-label">Last updated</div><div class="meta-value">${escapeHtml(formatLongDate(task.updatedAt))}</div></div></div>
+        ${error}${actions.length ? `<div class="detail-actions">${actions.join("")}</div>` : ""}
+        <div class="history"><div class="history-head"><span class="history-title">Execution history</span><span class="history-count">${history.length} ${history.length === 1 ? "attempt" : "attempts"}</span></div>${attempts}</div>`;
+    }
+    async function scheduleTask(event) {
+      event.preventDefault();
+      const button = $("#scheduleButton");
+      const localValue = $("#executionTime").value;
+      if (!localValue) { formMessage("Choose an execution time.", "error"); return; }
+      const when = new Date(localValue);
+      if (Number.isNaN(when.getTime())) { formMessage("Enter a valid date and time.", "error"); return; }
+      const request = { taskType:$("#taskType").value, executionTime:when.toISOString(), maxRetries:Number($("#maxRetries").value) };
+      button.disabled = true;
+      formMessage("Adding task to the queue…");
+      try {
+        const task = await api(`${API}/schedule`, { method:"POST", body:JSON.stringify(request) });
+        formMessage(`Task #${task.id} scheduled successfully.`, "success");
+        showToast(`Task #${task.id} added to the schedule.`);
+        $("#scheduleForm").reset();
+        $("#maxRetries").value = "3";
+        await loadTasks(false);
+        await selectTask(task.id, false);
+      } catch (error) {
+        formMessage(error.message, "error");
+        showToast(error.message, true);
+      } finally { button.disabled = false; }
+    }
+    async function taskAction(action, id) {
+      const confirmed = action === "cancel" ? window.confirm(`Cancel pending task #${id}?`) : true;
+      if (!confirmed) return;
+      try {
+        if (action === "cancel") await api(`${API}/${id}`, { method:"DELETE" });
+        else await api(`${API}/${id}/retry`, { method:"POST" });
+        showToast(action === "cancel" ? `Task #${id} cancelled.` : `Task #${id} queued for a new retry cycle.`);
+        await loadTasks(false);
+        await selectTask(id, false);
+      } catch (error) { showToast(error.message, true); }
+    }
+
+    $("#scheduleForm").addEventListener("submit", scheduleTask);
+    $("#statusFilter").addEventListener("change", () => { clearDetails(); loadTasks(false); });
+    $("#refreshButton").addEventListener("click", () => { checkHealth(); loadTasks(); });
+    $("#taskRows").addEventListener("click", (event) => {
+      const row = event.target.closest("tr[data-task-id]");
+      if (row) selectTask(row.dataset.taskId);
+    });
+    $("#detailContent").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (button) taskAction(button.dataset.action, button.dataset.id);
+    });
+    function updateClock() { $("#currentTime").textContent = new Intl.DateTimeFormat(undefined, { weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }).format(new Date()); }
+    updateClock();
+    checkHealth();
+    loadTasks(false);
+    setInterval(() => { updateClock(); checkHealth(); loadTasks(); }, 5000);
+  </script>
+</body>
+</html>

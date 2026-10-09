@@ -91,6 +91,10 @@ Run the application:
 ./mvnw spring-boot:run
 ```
 
+## Dashboard
+
+Once the application is running, open [http://localhost:8080/](http://localhost:8080/) for the built-in task dashboard. It is served by Spring Boot, so there is no separate frontend server to start. The dashboard shows task counts and recent tasks, lets you schedule work, filter by status, inspect attempt history, and cancel pending or retry failed tasks. It refreshes the task list every five seconds; use the refresh button for an immediate update.
+
 The schema is created/updated by Hibernate (`spring.jpa.hibernate.ddl-auto=update`). Local Compose credentials (`postgres` / `password`) are for development only. Override with `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`, or `SERVER_PORT`. No `.env` containing secrets is required.
 
 The application sets its JVM default timezone to UTC. The API uses UTC instants serialized with a `Z` suffix. For example, `2026-10-10T10:00:00Z` is an absolute UTC time. The body in the original project brief omitted a timezone; this API requires one so the scheduled instant is unambiguous.
